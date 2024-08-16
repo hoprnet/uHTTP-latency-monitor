@@ -1,0 +1,32 @@
+{
+    "name": "uhttp-latency-monitor",
+    "version": "0.0.1",
+    "main": "src/index.ts",
+    "author": "HOPR Association",
+    "license": "GPL-3.0",
+    "module": true,
+    "scripts": {
+        "prebuild": "node -p \"'export default \\'' + require('./package.json').version + '\\';'\" > src/version.ts",
+        "build": "yarn prebuild && tsc",
+        "format": "prettier --write src/ *.json *.md",
+        "format:ci": "prettier --check src/ *.js *.ts *.json *.md",
+        "start": "node build/index.js",
+        "lint": "eslint --fix .",
+        "lint:ci": "eslint --max-warnings 0 ."
+    },
+    "devDependencies": {
+        "@eslint/js": "^9.9.0",
+        "@types/debug": "^4.1.12",
+        "@types/eslint__js": "^8.42.3",
+        "@types/node": "^22.3.0",
+        "eslint": "^9.9.0",
+        "prettier": "^3.3.3",
+        "typescript": "^5.5.4",
+        "typescript-eslint": "^8.2.0"
+    },
+    "dependencies": {
+        "@hoprnet/uhttp-lib": "^3.4.2",
+        "debug": "^4.3.6",
+        "prom-client": "^15.1.3"
+    }
+}
