@@ -10,9 +10,10 @@
         "build": "yarn prebuild && tsc",
         "format": "prettier --write src/ *.json *.md",
         "format:ci": "prettier --check src/ *.js *.ts *.json *.md",
-        "start": "node build/index.js",
         "lint": "eslint --fix .",
-        "lint:ci": "eslint --max-warnings 0 ."
+        "lint:ci": "eslint --max-warnings 0 .",
+        "start": "node build/index.js",
+        "test": "exit 0"
     },
     "devDependencies": {
         "@eslint/js": "^9.9.0",
