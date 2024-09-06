@@ -15,14 +15,6 @@ if (require.main === module) {
     if (!process.env.UHTTP_LM_ZERO_HOP) {
         throw new Error("Missing 'UHTTP_LM_ZERO_HOP' env var.");
     }
-    if (!process.env.UHTTP_LM_LOCATION) {
-        log.warn("'UHTTP_LM_LOCATION' not set, using 'unset'.");
-    }
-    let location = process.env.UHTTP_LM_LOCATION || '';
-    location.trim();
-    if (!location) {
-        location = 'unset';
-    }
     if (!process.env.UHTTP_LM_PUSH_GATEWAY) {
         log.warn("'UHTTP_LM_PUSH_GATEWAY' not set, disabling metrics pushing");
     }
@@ -42,12 +34,12 @@ if (require.main === module) {
 
     runner
         .once(ops)
-        .then(collectMetrics(hops, location))
-        .catch(reportError(hops, location))
+        .then(collectMetrics(hops))
+        .catch(reportError(hops))
         .finally(pushMetrics(pushGateway));
 }
 
-function collectMetrics(hops: number, location: string) {
+function collectMetrics(hops: number) {
     return function (metrics: runner.Durations) {
         const fetchSum = new prom.Summary({
             name: `uhttp_latency_milliseconds`,
@@ -79,15 +71,15 @@ function collectMetrics(hops: number, location: string) {
             labelNames: ['hops', 'location'] as const,
             percentiles: [0.5, 0.7, 0.9, 0.99],
         });
-        fetchSum.observe({ hops, location }, metrics.fetchDur);
-        rpcSum.observe({ hops, location }, metrics.rpcDur);
-        exitAppSum.observe({ hops, location }, metrics.exitAppDur);
-        segSum.observe({ hops, location }, metrics.segDur);
-        hoprSum.observe({ hops, location }, metrics.hoprDur);
+        fetchSum.observe({ hops }, metrics.fetchDur);
+        rpcSum.observe({ hops }, metrics.rpcDur);
+        exitAppSum.observe({ hops }, metrics.exitAppDur);
+        segSum.observe({ hops }, metrics.segDur);
+        hoprSum.observe({ hops }, metrics.hoprDur);
     };
 }
 
-function reportError(hops: number, location: string) {
+function reportError(hops: number) {
     return function (err: Error) {
         log.error('Error trying to check latency: %s', err);
         const errorSum = new prom.Summary({
@@ -95,7 +87,7 @@ function reportError(hops: number, location: string) {
             help: 'Latency measure not possible due to error',
             labelNames: ['hops', 'location'] as const,
         });
-        errorSum.observe({ hops, location }, 0);
+        errorSum.observe({ hops }, 0);
     };
 }
 
