@@ -80,11 +80,11 @@ function start(uHTTPsettings: UHTTPsettings, settings: Settings) {
             tick(uClient, uHTTPsettings, settings);
         }, settings.intervalMs);
     }, settings.offsetMs);
-    log.info('Delaying first tick by %s ms offset', settings.offsetMs);
+    log.info('Delaying first tick by %dms offset', settings.offsetMs);
 }
 
 function tick(uClient: Routing.Client, uHTTPsettings: UHTTPsettings, settings: Settings) {
-    log.info('Executing latency tick - scheduled to execute every %s ms', settings.intervalMs);
+    log.info('Executing latency tick - scheduled to execute every %dms', settings.intervalMs);
     const hops = uHTTPsettings.forceZeroHop ? 0 : 1;
     runner
         .once(uClient, uHTTPsettings.rpcProvider)
