@@ -75,19 +75,22 @@ function start(uHTTPsettings: UHTTPsettings, settings: Settings) {
     const uClient = runner.init(uHTTPsettings.uClientId, uHTTPsettings);
 
     setTimeout(() => {
+        tick(uClient, uHTTPsettings, settings);
         setInterval(() => {
-            tick(uClient, uHTTPsettings, settings.pushGateway);
+            tick(uClient, uHTTPsettings, settings);
         }, settings.intervalMs);
     }, settings.offsetMs);
+    log.info('Delaying first tick by %s ms offset', settings.offsetMs);
 }
 
-function tick(uClient: Routing.Client, uHTTPsettings: UHTTPsettings, pushGateway?: string) {
+function tick(uClient: Routing.Client, uHTTPsettings: UHTTPsettings, settings: Settings) {
+    log.info('Executing latency tick - scheduled to execute every %s ms', settings.intervalMs);
     const hops = uHTTPsettings.forceZeroHop ? 0 : 1;
     runner
         .once(uClient, uHTTPsettings.rpcProvider)
         .then(collectMetrics(hops))
         .catch(reportError(hops))
-        .finally(pushMetrics(pushGateway));
+        .finally(pushMetrics(settings.pushGateway));
 }
 
 function collectMetrics(hops: number) {
