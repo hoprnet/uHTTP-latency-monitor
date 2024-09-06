@@ -1,22 +1,16 @@
 import { Routing } from '@hoprnet/uhttp-lib';
 
-type Ops = {
-    rpcProvider: string;
-    uhttpClientId: string;
-    forceZeroHop: boolean;
-};
-
 const READY_TIMEOUT = 10_000; // 10 sec
 
 export type Durations = {
     fetchDur: number;
 } & Routing.LatencyStatistics;
 
-export async function once(ops: Ops): Promise<Durations> {
-    const uClient = new Routing.Client(ops.uhttpClientId, {
-        forceZeroHop: ops.forceZeroHop,
-        measureLatency: true,
-    });
+export function init(uClientId: string, settings: Routing.Settings): Routing.Client {
+    return new Routing.Client(uClientId, { ...settings, measureLatency: true });
+}
+
+export async function once(uClient: Routing.Client, rpcProvider: string): Promise<Durations> {
     const id = Math.floor(Math.random() * 100);
     const payload = {
         jsonrpc: '2.0',
@@ -36,7 +30,7 @@ export async function once(ops: Ops): Promise<Durations> {
     };
 
     const startedAt = performance.now();
-    const res = await uClient.fetch(ops.rpcProvider, {
+    const res = await uClient.fetch(rpcProvider, {
         method: 'POST',
         body: JSON.stringify(payload),
         headers,

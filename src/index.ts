@@ -15,22 +15,39 @@ if (require.main === module) {
     if (!process.env.UHTTP_LM_ZERO_HOP) {
         throw new Error("Missing 'UHTTP_LM_ZERO_HOP' env var.");
     }
+    if (!process.env.UHTTP_LM_DISCOVERY_PLATFORM) {
+        throw new Error("Missing 'UHTTP_LM_DISCOVERY_PLATFORM' env var.");
+    }
+    if (!process.env.UHTTP_LM_INTERVAL) {
+        throw new Error("Missing 'UHTTP_LM_INTERVAL' env var.");
+    }
+    if (!process.env.UHTTP_LM_OFFSET) {
+        throw new Error("Missing 'UHTTP_LM_OFFSET' env var.");
+    }
     if (!process.env.UHTTP_LM_PUSH_GATEWAY) {
         log.warn("'UHTTP_LM_PUSH_GATEWAY' not set, disabling metrics pushing");
     }
     const pushGateway = process.env.UHTTP_LM_PUSH_GATEWAY;
 
     const forceZeroHop = parseBooleanEnv(process.env.UHTTP_LM_ZERO_HOP);
+    const discoveryPlatformEndpoint = process.env.UHTTP_LM_DISCOVERY_PLATFORM;
     const hops = forceZeroHop ? 0 : 1;
-    const ops = {
-        uhttpClientId: process.env.UHTTP_LM_CLIENT_ID,
-        rpcProvider: process.env.UHTTP_LM_RPC_PROVIDER,
+    const uClientId = process.env.UHTTP_LM_CLIENT_ID;
+    const rpcProvider = process.env.UHTTP_LM_RPC_PROVIDER;
+    const settings = {
         forceZeroHop,
+        discoveryPlatformEndpoint,
     };
     const logOps = {
-        rpcProvider: ops.rpcProvider,
+        rpcProvider,
+        discoveryPlatformEndpoint,
+        forceZeroHop,
+        uClientId,
+        pushGateway,
     };
     log.info('Latency Monitor[%s] started with %o', Version, logOps);
+
+    const uClient = runner.init(uClientId, settings);
 
     runner
         .once(ops)
