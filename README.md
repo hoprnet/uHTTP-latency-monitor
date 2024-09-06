@@ -4,7 +4,7 @@ Measure roundtrip latency through uHTTP network.
 
 ## Development setup
 
--   Copy `.env.sample. to `.env` and adjust values as needed.
+-   Copy `.env.sample` to `.env` and adjust values as needed.
 -   Build application with `yarn build`
 -   Start application with `export $(cat .env) && yarn start`
 
