@@ -9,7 +9,7 @@
         "prebuild": "node -p \"'export default \\'' + require('./package.json').version + '\\';'\" > src/version.ts",
         "build": "yarn prebuild && tsc",
         "format": "prettier --write src/ *.json *.md",
-        "format:ci": "prettier --check src/ *.js *.ts *.json *.md",
+        "format:ci": "prettier --check src/ *.json *.md",
         "lint": "eslint --fix .",
         "lint:ci": "eslint --max-warnings 0 .",
         "start": "node build/index.js",
