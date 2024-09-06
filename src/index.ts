@@ -1,8 +1,17 @@
 import prom from 'prom-client';
+import { Routing } from '@hoprnet/uhttp-lib';
 
 import Version from './version';
 import log from './logger';
 import * as runner from './runner';
+
+type UHTTPsettings = Routing.Settings & { uClientId: string; rpcProvider: string };
+
+type Settings = {
+    pushGateway?: string;
+    intervalMs: number;
+    offsetMs: number;
+};
 
 // if this file is the entrypoint of the nodejs process
 if (require.main === module) {
@@ -18,39 +27,64 @@ if (require.main === module) {
     if (!process.env.UHTTP_LM_DISCOVERY_PLATFORM) {
         throw new Error("Missing 'UHTTP_LM_DISCOVERY_PLATFORM' env var.");
     }
-    if (!process.env.UHTTP_LM_INTERVAL) {
-        throw new Error("Missing 'UHTTP_LM_INTERVAL' env var.");
+    if (!process.env.UHTTP_LM_INTERVAL_MS) {
+        throw new Error("Missing 'UHTTP_LM_INTERVAL_MS' env var.");
     }
-    if (!process.env.UHTTP_LM_OFFSET) {
-        throw new Error("Missing 'UHTTP_LM_OFFSET' env var.");
+    if (!process.env.UHTTP_LM_OFFSET_MS) {
+        throw new Error("Missing 'UHTTP_LM_OFFSET_MS' env var.");
     }
     if (!process.env.UHTTP_LM_PUSH_GATEWAY) {
         log.warn("'UHTTP_LM_PUSH_GATEWAY' not set, disabling metrics pushing");
     }
-    const pushGateway = process.env.UHTTP_LM_PUSH_GATEWAY;
 
-    const forceZeroHop = parseBooleanEnv(process.env.UHTTP_LM_ZERO_HOP);
-    const discoveryPlatformEndpoint = process.env.UHTTP_LM_DISCOVERY_PLATFORM;
-    const hops = forceZeroHop ? 0 : 1;
     const uClientId = process.env.UHTTP_LM_CLIENT_ID;
     const rpcProvider = process.env.UHTTP_LM_RPC_PROVIDER;
-    const settings = {
-        forceZeroHop,
-        discoveryPlatformEndpoint,
-    };
-    const logOps = {
-        rpcProvider,
-        discoveryPlatformEndpoint,
-        forceZeroHop,
+    const forceZeroHop = parseBooleanEnv(process.env.UHTTP_LM_ZERO_HOP);
+    const discoveryPlatformEndpoint = process.env.UHTTP_LM_DISCOVERY_PLATFORM;
+    const intervalMs = parseInt(process.env.UHTTP_LM_INTERVAL_MS);
+    if (!intervalMs) {
+        throw new Error("failed to parse 'UHTTP_LM_INTERVAL_MS' as integer value");
+    }
+    const offsetMs = parseInt(process.env.UHTTP_LM_OFFSET_MS);
+    if (!offsetMs) {
+        throw new Error("failed to parse 'UHTTP_LM_OFFSET_MS' as integer value");
+    }
+    const pushGateway = process.env.UHTTP_LM_PUSH_GATEWAY;
+
+    const uHTTPsettings = {
         uClientId,
-        pushGateway,
+        discoveryPlatformEndpoint,
+        forceZeroHop,
+        rpcProvider,
     };
-    log.info('Latency Monitor[%s] started with %o', Version, logOps);
+    const settings = {
+        pushGateway,
+        intervalMs,
+        offsetMs,
+    };
+    const logOpts = {
+        uHTTPsettings,
+        settings,
+    };
+    log.info('Latency Monitor[%s] started with %o', Version, logOpts);
 
-    const uClient = runner.init(uClientId, settings);
+    start(uHTTPsettings, settings);
+}
 
+function start(uHTTPsettings: UHTTPsettings, settings: Settings) {
+    const uClient = runner.init(uHTTPsettings.uClientId, uHTTPsettings);
+
+    setTimeout(() => {
+        setInterval(() => {
+            tick(uClient, uHTTPsettings, settings.pushGateway);
+        }, settings.intervalMs);
+    }, settings.offsetMs);
+}
+
+function tick(uClient: Routing.Client, uHTTPsettings: UHTTPsettings, pushGateway?: string) {
+    const hops = uHTTPsettings.forceZeroHop ? 0 : 1;
     runner
-        .once(ops)
+        .once(uClient, uHTTPsettings.rpcProvider)
         .then(collectMetrics(hops))
         .catch(reportError(hops))
         .finally(pushMetrics(pushGateway));
