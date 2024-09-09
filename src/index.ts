@@ -1,8 +1,17 @@
 import prom from 'prom-client';
+import { Routing } from '@hoprnet/uhttp-lib';
 
 import Version from './version';
 import log from './logger';
 import * as runner from './runner';
+
+type UHTTPsettings = Routing.Settings & { uClientId: string; rpcProvider: string };
+
+type Settings = {
+    pushGateway?: string;
+    intervalMs: number;
+    offsetMs: number;
+};
 
 // if this file is the entrypoint of the nodejs process
 if (require.main === module) {
@@ -15,39 +24,76 @@ if (require.main === module) {
     if (!process.env.UHTTP_LM_ZERO_HOP) {
         throw new Error("Missing 'UHTTP_LM_ZERO_HOP' env var.");
     }
-    if (!process.env.UHTTP_LM_LOCATION) {
-        log.warn("'UHTTP_LM_LOCATION' not set, using 'unset'.");
+    if (!process.env.UHTTP_LM_DISCOVERY_PLATFORM) {
+        throw new Error("Missing 'UHTTP_LM_DISCOVERY_PLATFORM' env var.");
     }
-    let location = process.env.UHTTP_LM_LOCATION || '';
-    location.trim();
-    if (!location) {
-        location = 'unset';
+    if (!process.env.UHTTP_LM_INTERVAL_MS) {
+        throw new Error("Missing 'UHTTP_LM_INTERVAL_MS' env var.");
+    }
+    if (!process.env.UHTTP_LM_OFFSET_MS) {
+        throw new Error("Missing 'UHTTP_LM_OFFSET_MS' env var.");
     }
     if (!process.env.UHTTP_LM_PUSH_GATEWAY) {
         log.warn("'UHTTP_LM_PUSH_GATEWAY' not set, disabling metrics pushing");
     }
+
+    const uClientId = process.env.UHTTP_LM_CLIENT_ID;
+    const rpcProvider = process.env.UHTTP_LM_RPC_PROVIDER;
+    const forceZeroHop = parseBooleanEnv(process.env.UHTTP_LM_ZERO_HOP);
+    const discoveryPlatformEndpoint = process.env.UHTTP_LM_DISCOVERY_PLATFORM;
+    const intervalMs = parseInt(process.env.UHTTP_LM_INTERVAL_MS);
+    if (!intervalMs) {
+        throw new Error("failed to parse 'UHTTP_LM_INTERVAL_MS' as integer value");
+    }
+    const offsetMs = parseInt(process.env.UHTTP_LM_OFFSET_MS);
+    if (!offsetMs) {
+        throw new Error("failed to parse 'UHTTP_LM_OFFSET_MS' as integer value");
+    }
     const pushGateway = process.env.UHTTP_LM_PUSH_GATEWAY;
 
-    const forceZeroHop = parseBooleanEnv(process.env.UHTTP_LM_ZERO_HOP);
-    const hops = forceZeroHop ? 0 : 1;
-    const ops = {
-        uhttpClientId: process.env.UHTTP_LM_CLIENT_ID,
-        rpcProvider: process.env.UHTTP_LM_RPC_PROVIDER,
+    const uHTTPsettings = {
+        uClientId,
+        discoveryPlatformEndpoint,
         forceZeroHop,
+        rpcProvider,
     };
-    const logOps = {
-        rpcProvider: ops.rpcProvider,
+    const settings = {
+        pushGateway,
+        intervalMs,
+        offsetMs,
     };
-    log.info('Latency Monitor[%s] started with %o', Version, logOps);
+    const logOpts = {
+        uHTTPsettings,
+        settings,
+    };
+    log.info('Latency Monitor[%s] started with %o', Version, logOpts);
 
-    runner
-        .once(ops)
-        .then(collectMetrics(hops, location))
-        .catch(reportError(hops, location))
-        .finally(pushMetrics(pushGateway));
+    start(uHTTPsettings, settings);
 }
 
-function collectMetrics(hops: number, location: string) {
+function start(uHTTPsettings: UHTTPsettings, settings: Settings) {
+    const uClient = runner.init(uHTTPsettings.uClientId, uHTTPsettings);
+
+    setTimeout(() => {
+        tick(uClient, uHTTPsettings, settings);
+        setInterval(() => {
+            tick(uClient, uHTTPsettings, settings);
+        }, settings.intervalMs);
+    }, settings.offsetMs);
+    log.info('Delaying first tick by %dms offset', settings.offsetMs);
+}
+
+function tick(uClient: Routing.Client, uHTTPsettings: UHTTPsettings, settings: Settings) {
+    log.info('Executing latency tick - scheduled to execute every %dms', settings.intervalMs);
+    const hops = uHTTPsettings.forceZeroHop ? 0 : 1;
+    runner
+        .once(uClient, uHTTPsettings.rpcProvider)
+        .then(collectMetrics(hops))
+        .catch(reportError(hops))
+        .finally(pushMetrics(settings.pushGateway));
+}
+
+function collectMetrics(hops: number) {
     return function (metrics: runner.Durations) {
         const fetchSum = new prom.Summary({
             name: `uhttp_latency_milliseconds`,
@@ -79,15 +125,15 @@ function collectMetrics(hops: number, location: string) {
             labelNames: ['hops', 'location'] as const,
             percentiles: [0.5, 0.7, 0.9, 0.99],
         });
-        fetchSum.observe({ hops, location }, metrics.fetchDur);
-        rpcSum.observe({ hops, location }, metrics.rpcDur);
-        exitAppSum.observe({ hops, location }, metrics.exitAppDur);
-        segSum.observe({ hops, location }, metrics.segDur);
-        hoprSum.observe({ hops, location }, metrics.hoprDur);
+        fetchSum.observe({ hops }, metrics.fetchDur);
+        rpcSum.observe({ hops }, metrics.rpcDur);
+        exitAppSum.observe({ hops }, metrics.exitAppDur);
+        segSum.observe({ hops }, metrics.segDur);
+        hoprSum.observe({ hops }, metrics.hoprDur);
     };
 }
 
-function reportError(hops: number, location: string) {
+function reportError(hops: number) {
     return function (err: Error) {
         log.error('Error trying to check latency: %s', err);
         const errorSum = new prom.Summary({
@@ -95,7 +141,7 @@ function reportError(hops: number, location: string) {
             help: 'Latency measure not possible due to error',
             labelNames: ['hops', 'location'] as const,
         });
-        errorSum.observe({ hops, location }, 0);
+        errorSum.observe({ hops }, 0);
     };
 }
 
