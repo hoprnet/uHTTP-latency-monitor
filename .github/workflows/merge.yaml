@@ -1,17 +1,21 @@
-name: Build
+name: Merge PR
 
 on:
     pull_request:
-        types: [synchronize, opened, reopened]
+        types:
+            - closed
+        branches:
+            - main
 
 concurrency:
-    group: build
-    cancel-in-progress: true
+    group: merge
+    cancel-in-progress: false
 
 jobs:
-    build-and-publish:
-        name: Build and Push
+    merge:
+        name: Merge PR
         runs-on: self-hosted-hoprnet-small
+        if: github.event.pull_request.merged == true
 
         steps:
             - name: Checkout repository
@@ -23,6 +27,7 @@ jobs:
                   node-version: 20
 
             - name: Setup GCP
+              id: gcp
               uses: hoprnet/hopr-workflows/actions/setup-gcp@master
               with:
                   google-credentials: ${{ secrets.GOOGLE_HOPRASSOCIATION_CREDENTIALS_REGISTRY }}
@@ -33,26 +38,8 @@ jobs:
               with:
                 driver: kubernetes
 
-            - name: Building
-              run: yarn build
-
-            - name: Linting
-              run: yarn lint:ci
-
-            - name: Formatting
-              run: yarn format:ci
-
-            - name: Testing
-              run: yarn test
-
-            - name: Get PR version
-              id: variables
-              run: |
-                  PR_VERSION=$(node -p "require('./package.json').version")-pr.${{ github.event.pull_request.number }}
-                  echo "PR_VERSION=${PR_VERSION}" >> $GITHUB_OUTPUT
-
             - name: Build and push docker image
               uses: docker/build-push-action@v4
               with:
                 push: true
-                tags: europe-west3-docker.pkg.dev/hoprassociation/docker-images/uhttp-latency-monitor:${{ steps.variables.outputs.PR_VERSION }}
+                tags: europe-west3-docker.pkg.dev/hoprassociation/docker-images/uhttp-latency-monitor:latest
