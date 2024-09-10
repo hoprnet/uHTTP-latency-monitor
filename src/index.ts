@@ -12,7 +12,7 @@ type Settings = {
     intervalMs: number;
     offsetMs: number;
     metricLabels: { [key: string]: string };
-    metrics: {[key:string]: prom.Summary};
+    metrics: { [key: string]: prom.Summary };
 };
 
 // if this file is the entrypoint of the nodejs process
@@ -132,7 +132,7 @@ if (require.main === module) {
         percentiles: [0.5, 0.7, 0.9, 0.99],
     });
 
-    settings.metrics['hoprSum'] =new prom.Summary({
+    settings.metrics['hoprSum'] = new prom.Summary({
         name: `uhttp_hopr_network_milliseconds`,
         help: 'Estimated duration through the HOPR mixnet back and forth',
         labelNames,
@@ -158,7 +158,6 @@ function start(uHTTPsettings: UHTTPsettings, settings: Settings) {
 
 function tick(uClient: Routing.Client, uHTTPsettings: UHTTPsettings, settings: Settings) {
     log.info('Executing latency tick - scheduled to execute every %dms', settings.intervalMs);
-    const hops = uHTTPsettings.forceZeroHop ? 0 : 1;
     runner
         .once(uClient, uHTTPsettings.rpcProvider)
         .then(collectMetrics(settings.metrics, settings.metricLabels))
@@ -166,7 +165,10 @@ function tick(uClient: Routing.Client, uHTTPsettings: UHTTPsettings, settings: S
         .finally(pushMetrics(settings.pushGateway));
 }
 
-function collectMetrics(metrics: { [key: string]: prom.Summary }, metricLabels: { [key: string]: string }) {
+function collectMetrics(
+    metrics: { [key: string]: prom.Summary },
+    metricLabels: { [key: string]: string },
+) {
     return function (metricsDurations: runner.Durations) {
         metrics['fetchSum'].observe(metricLabels, metricsDurations.fetchDur);
         metrics['rpcSum'].observe(metricLabels, metricsDurations.rpcDur);
@@ -176,7 +178,10 @@ function collectMetrics(metrics: { [key: string]: prom.Summary }, metricLabels: 
     };
 }
 
-function reportError(metrics: { [key: string]: prom.Summary }, metricLabels: { [key: string]: string }) {
+function reportError(
+    metrics: { [key: string]: prom.Summary },
+    metricLabels: { [key: string]: string },
+) {
     return function (err: Error) {
         log.error('Error trying to check latency: %s', err);
         metrics['errorSum'].observe(metricLabels, 0);
