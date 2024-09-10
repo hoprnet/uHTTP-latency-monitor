@@ -25,3 +25,4 @@ coverage/
 
 # dependencies
 node_modules/
+.vscode/
