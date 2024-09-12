@@ -11,8 +11,8 @@ type Settings = {
     pushGateway?: string;
     intervalMs: number;
     offsetMs: number;
-    metricLabels: { [key: string]: string };
-    metrics: { [key: string]: prom.Summary };
+    metricLabels: Record<string,string>;
+    metrics: Record<string,prom.Summary>;
 };
 
 // if this file is the entrypoint of the nodejs process
@@ -36,7 +36,31 @@ if (require.main === module) {
         throw new Error("Missing 'UHTTP_LM_OFFSET_MS' env var.");
     }
     if (!process.env.UHTTP_LM_PUSH_GATEWAY) {
-        log.warn("'UHTTP_LM_PUSH_GATEWAY' not set, disabling metrics pushing");
+        throw new Error("Missing 'UHTTP_LM_PUSH_GATEWAY' env var");
+    }
+
+    if (!process.env.UHTTP_LM_METRIC_INSTANCE) {
+        throw new Error("Missing 'UHTTP_LM_METRIC_INSTANCE' env var");
+    }
+
+    if (!process.env.UHTTP_LM_METRIC_REGION) {
+        throw new Error("Missing 'UHTTP_LM_METRIC_REGION' env var");
+    }
+
+    if (!process.env.UHTTP_LM_METRIC_ZONE) {
+        throw new Error("Missing 'UHTTP_LM_METRIC_ZONE' env var");
+    }
+
+    if (!process.env.UHTTP_LM_METRIC_LOCATION) {
+        throw new Error("Missing 'UHTTP_LM_METRIC_LOCATION' env var");
+    }
+
+    if (!process.env.UHTTP_LM_METRIC_LATITUDE) {
+        throw new Error("Missing 'UHTTP_LM_METRIC_LATITUDE' env var");
+    }
+
+    if (!process.env.UHTTP_LM_METRIC_LONGITUDE) {
+        throw new Error("Missing 'UHTTP_LM_METRIC_LONGITUDE' env var");
     }
 
     const uClientId = process.env.UHTTP_LM_CLIENT_ID;
@@ -66,36 +90,18 @@ if (require.main === module) {
         metrics: {},
         metricLabels: {
             hops: forceZeroHop ? '0' : '1',
+            instance: process.env.UHTTP_LM_METRIC_INSTANCE || 'unknown',
+            region: process.env.UHTTP_LM_METRIC_REGION || 'unknown',
+            zone: process.env.UHTTP_LM_METRIC_ZONE || 'unknown',
+            location: process.env.UHTTP_LM_METRIC_LOCATION || 'unknown',
+            latitude: process.env.UHTTP_LM_METRIC_LATITUDE || 'unknown',
+            longitude: process.env.UHTTP_LM_METRIC_LONGITUDE || 'unknown',
         },
     };
     const logOpts = {
         uHTTPsettings,
         settings,
     };
-
-    if (process.env.UHTTP_LM_METRIC_INSTANCE !== undefined) {
-        settings.metricLabels['instance'] = process.env.UHTTP_LM_METRIC_INSTANCE;
-    }
-
-    if (process.env.UHTTP_LM_METRIC_REGION !== undefined) {
-        settings.metricLabels['region'] = process.env.UHTTP_LM_METRIC_REGION;
-    }
-
-    if (process.env.UHTTP_LM_METRIC_ZONE !== undefined) {
-        settings.metricLabels['zone'] = process.env.UHTTP_LM_METRIC_ZONE;
-    }
-
-    if (process.env.UHTTP_LM_METRIC_LOCATION !== undefined) {
-        settings.metricLabels['location'] = process.env.UHTTP_LM_METRIC_LOCATION;
-    }
-
-    if (process.env.UHTTP_LM_METRIC_LATITUDE !== undefined) {
-        settings.metricLabels['latitude'] = process.env.UHTTP_LM_METRIC_LATITUDE;
-    }
-
-    if (process.env.UHTTP_LM_METRIC_LONGITUDE !== undefined) {
-        settings.metricLabels['longitude'] = process.env.UHTTP_LM_METRIC_LONGITUDE;
-    }
 
     const labelNames = Object.keys(settings.metricLabels);
     settings.metrics['errorSum'] = new prom.Summary({
@@ -166,8 +172,8 @@ function tick(uClient: Routing.Client, uHTTPsettings: UHTTPsettings, settings: S
 }
 
 function collectMetrics(
-    metrics: { [key: string]: prom.Summary },
-    metricLabels: { [key: string]: string },
+    metrics: Record<string,prom.Summary>,
+    metricLabels: Record<string,string>,
 ) {
     return function (metricsDurations: runner.Durations) {
         metrics['fetchSum'].observe(metricLabels, metricsDurations.fetchDur);
@@ -179,8 +185,8 @@ function collectMetrics(
 }
 
 function reportError(
-    metrics: { [key: string]: prom.Summary },
-    metricLabels: { [key: string]: string },
+    metrics: Record<string,prom.Summary>,
+    metricLabels: Record<string,string>,
 ) {
     return function (err: Error) {
         log.error('Error trying to check latency: %s', err);
