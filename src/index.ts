@@ -201,7 +201,7 @@ function pushMetrics(pushGateway?: string) {
         }
         const gateway = new prom.Pushgateway(pushGateway);
         gateway
-            .pushAdd({ jobName: 'uhttp-latency-monitor' })
+            .push({ jobName: 'uhttp-latency-monitor' })
             .then(() => {
                 log.info('Latency Monitor[%s] finished run successfully', Version);
             })
