@@ -12,7 +12,7 @@ type Settings = {
     intervalMs: number;
     offsetMs: number;
     metricLabels: Record<string, string>;
-    metrics: Record<string, prom.Summary>;
+    metrics: Record<string, prom.Summary | prom.Counter>;
 };
 
 // if this file is the entrypoint of the nodejs process
@@ -104,9 +104,9 @@ if (require.main === module) {
     };
 
     const labelNames = Object.keys(settings.metricLabels);
-    settings.metrics['errorSum'] = new prom.Summary({
+    settings.metrics['errorSum'] = new prom.Counter({
         name: `uhttp_error`,
-        help: 'Latency measure not possible due to error',
+        help: 'Error counter measuring latency',
         labelNames,
     });
 
@@ -166,8 +166,10 @@ function tick(uClient: Routing.Client, uHTTPsettings: UHTTPsettings, settings: S
     log.info('Executing latency tick - scheduled to execute every %dms', settings.intervalMs);
     runner
         .once(uClient, uHTTPsettings.rpcProvider)
-        .then(collectMetrics(settings.metrics, settings.metricLabels))
-        .catch(reportError(settings.metrics, settings.metricLabels))
+        .then(
+            collectMetrics(settings.metrics as Record<string, prom.Summary>, settings.metricLabels),
+        )
+        .catch(reportError(settings.metrics['errorSum'] as prom.Counter, settings.metricLabels))
         .finally(pushMetrics(settings.pushGateway));
 }
 
@@ -184,10 +186,10 @@ function collectMetrics(
     };
 }
 
-function reportError(metrics: Record<string, prom.Summary>, metricLabels: Record<string, string>) {
+function reportError(errorCounter: prom.Counter, metricLabels: Record<string, string>) {
     return function (err: Error) {
         log.error('Error trying to check latency: %s', err);
-        metrics['errorSum'].observe(metricLabels, 0);
+        errorCounter.inc(metricLabels);
     };
 }
 
