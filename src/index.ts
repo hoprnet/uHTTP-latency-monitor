@@ -11,8 +11,8 @@ type Settings = {
     pushGateway?: string;
     intervalMs: number;
     offsetMs: number;
-    metricLabels: Record<string,string>;
-    metrics: Record<string,prom.Summary>;
+    metricLabels: Record<string, string>;
+    metrics: Record<string, prom.Summary>;
 };
 
 // if this file is the entrypoint of the nodejs process
@@ -172,8 +172,8 @@ function tick(uClient: Routing.Client, uHTTPsettings: UHTTPsettings, settings: S
 }
 
 function collectMetrics(
-    metrics: Record<string,prom.Summary>,
-    metricLabels: Record<string,string>,
+    metrics: Record<string, prom.Summary>,
+    metricLabels: Record<string, string>,
 ) {
     return function (metricsDurations: runner.Durations) {
         metrics['fetchSum'].observe(metricLabels, metricsDurations.fetchDur);
@@ -184,10 +184,7 @@ function collectMetrics(
     };
 }
 
-function reportError(
-    metrics: Record<string,prom.Summary>,
-    metricLabels: Record<string,string>,
-) {
+function reportError(metrics: Record<string, prom.Summary>, metricLabels: Record<string, string>) {
     return function (err: Error) {
         log.error('Error trying to check latency: %s', err);
         metrics['errorSum'].observe(metricLabels, 0);
