@@ -26,3 +26,6 @@ coverage/
 # dependencies
 node_modules/
 .vscode/
+
+# Created by github pipeline
+gha-creds-*.json
