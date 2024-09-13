@@ -105,4 +105,4 @@ jobs:
                   to: 'Releases'
                   topic: 'main'
                   content: |
-                      I'm thrilled to inform the new **uhttp-latency-monitor** version **${{ steps.environment.outputs.current_version }}** has been released.
+                      I'm thrilled to inform the new **uhttp-latency-monitor** version **${{ steps.environment.outputs.release_version }}** has been released.
