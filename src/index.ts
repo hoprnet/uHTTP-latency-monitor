@@ -8,9 +8,11 @@ import * as runner from './runner';
 type UHTTPsettings = Routing.Settings & { uClientId: string; rpcProvider: string };
 
 type Settings = {
-    pushGateway?: string;
+    pushGateway: string;
     intervalMs: number;
     offsetMs: number;
+    metricLabels: Record<string, string>;
+    metrics: Record<string, prom.Summary | prom.Counter>;
 };
 
 // if this file is the entrypoint of the nodejs process
@@ -34,7 +36,31 @@ if (require.main === module) {
         throw new Error("Missing 'UHTTP_LM_OFFSET_MS' env var.");
     }
     if (!process.env.UHTTP_LM_PUSH_GATEWAY) {
-        log.warn("'UHTTP_LM_PUSH_GATEWAY' not set, disabling metrics pushing");
+        throw new Error("Missing 'UHTTP_LM_PUSH_GATEWAY' env var");
+    }
+
+    if (!process.env.UHTTP_LM_METRIC_INSTANCE) {
+        throw new Error("Missing 'UHTTP_LM_METRIC_INSTANCE' env var");
+    }
+
+    if (!process.env.UHTTP_LM_METRIC_REGION) {
+        throw new Error("Missing 'UHTTP_LM_METRIC_REGION' env var");
+    }
+
+    if (!process.env.UHTTP_LM_METRIC_ZONE) {
+        throw new Error("Missing 'UHTTP_LM_METRIC_ZONE' env var");
+    }
+
+    if (!process.env.UHTTP_LM_METRIC_LOCATION) {
+        throw new Error("Missing 'UHTTP_LM_METRIC_LOCATION' env var");
+    }
+
+    if (!process.env.UHTTP_LM_METRIC_LATITUDE) {
+        throw new Error("Missing 'UHTTP_LM_METRIC_LATITUDE' env var");
+    }
+
+    if (!process.env.UHTTP_LM_METRIC_LONGITUDE) {
+        throw new Error("Missing 'UHTTP_LM_METRIC_LONGITUDE' env var");
     }
 
     const uClientId = process.env.UHTTP_LM_CLIENT_ID;
@@ -57,15 +83,68 @@ if (require.main === module) {
         forceZeroHop,
         rpcProvider,
     };
-    const settings = {
+    const settings: Settings = {
         pushGateway,
         intervalMs,
         offsetMs,
+        metrics: {},
+        metricLabels: {
+            hops: forceZeroHop ? '0' : '1',
+            instance: process.env.UHTTP_LM_METRIC_INSTANCE,
+            region: process.env.UHTTP_LM_METRIC_REGION,
+            zone: process.env.UHTTP_LM_METRIC_ZONE,
+            location: process.env.UHTTP_LM_METRIC_LOCATION,
+            latitude: process.env.UHTTP_LM_METRIC_LATITUDE,
+            longitude: process.env.UHTTP_LM_METRIC_LONGITUDE,
+        },
     };
     const logOpts = {
         uHTTPsettings,
         settings,
     };
+
+    const labelNames = Object.keys(settings.metricLabels);
+    settings.metrics['errorSum'] = new prom.Counter({
+        name: `uhttp_error`,
+        help: 'Error counter measuring latency',
+        labelNames,
+    });
+
+    settings.metrics['fetchSum'] = new prom.Summary({
+        name: `uhttp_latency_milliseconds`,
+        help: 'Total latency of successful request',
+        labelNames,
+        percentiles: [0.5, 0.7, 0.9, 0.99],
+    });
+
+    settings.metrics['rpcSum'] = new prom.Summary({
+        name: `uhttp_rpc_call_milliseconds`,
+        help: 'The total duration of a round-trip RPC call',
+        labelNames,
+        percentiles: [0.5, 0.7, 0.9, 0.99],
+    });
+
+    settings.metrics['exitAppSum'] = new prom.Summary({
+        name: `uhttp_exit_app_milliseconds`,
+        help: 'Approximate total execution time spent in the exit application, excluding RPC call duration',
+        labelNames,
+        percentiles: [0.5, 0.7, 0.9, 0.99],
+    });
+
+    settings.metrics['segSum'] = new prom.Summary({
+        name: `uhttp_segment_sending_milliseconds`,
+        help: 'Total duration of sending all segments to the hoprd entry node, including acknowledgment receipt',
+        labelNames,
+        percentiles: [0.5, 0.7, 0.9, 0.99],
+    });
+
+    settings.metrics['hoprSum'] = new prom.Summary({
+        name: `uhttp_hopr_network_milliseconds`,
+        help: 'Estimated duration through the HOPR mixnet back and forth',
+        labelNames,
+        percentiles: [0.5, 0.7, 0.9, 0.99],
+    });
+
     log.info('Latency Monitor[%s] started with %o', Version, logOpts);
 
     start(uHTTPsettings, settings);
@@ -85,80 +164,40 @@ function start(uHTTPsettings: UHTTPsettings, settings: Settings) {
 
 function tick(uClient: Routing.Client, uHTTPsettings: UHTTPsettings, settings: Settings) {
     log.info('Executing latency tick - scheduled to execute every %dms', settings.intervalMs);
-    const hops = uHTTPsettings.forceZeroHop ? 0 : 1;
     runner
         .once(uClient, uHTTPsettings.rpcProvider)
-        .then(collectMetrics(hops))
-        .catch(reportError(hops))
-        .finally(pushMetrics(settings.pushGateway));
+        .then(collectMetrics(settings.metrics as Record<string, prom.Summary>))
+        .catch(reportError(settings.metrics['errorSum'] as prom.Counter))
+        .finally(pushMetrics(settings));
 }
 
-function collectMetrics(hops: number) {
-    return function (metrics: runner.Durations) {
-        const fetchSum = new prom.Summary({
-            name: `uhttp_latency_milliseconds`,
-            help: 'Total latency of successful request',
-            labelNames: ['hops', 'location'] as const,
-            percentiles: [0.5, 0.7, 0.9, 0.99],
-        });
-        const rpcSum = new prom.Summary({
-            name: `uhttp_rpc_call_milliseconds`,
-            help: 'The total duration of a round-trip RPC call',
-            labelNames: ['hops', 'location'] as const,
-            percentiles: [0.5, 0.7, 0.9, 0.99],
-        });
-        const exitAppSum = new prom.Summary({
-            name: `uhttp_exit_app_milliseconds`,
-            help: 'Approximate total execution time spent in the exit application, excluding RPC call duration',
-            labelNames: ['hops', 'location'] as const,
-            percentiles: [0.5, 0.7, 0.9, 0.99],
-        });
-        const segSum = new prom.Summary({
-            name: `uhttp_segment_sending_milliseconds`,
-            help: 'Total duration of sending all segments to the hoprd entry node, including acknowledgment receipt',
-            labelNames: ['hops', 'location'] as const,
-            percentiles: [0.5, 0.7, 0.9, 0.99],
-        });
-        const hoprSum = new prom.Summary({
-            name: `uhttp_hopr_network_milliseconds`,
-            help: 'Estimated duration through the HOPR mixnet back and forth',
-            labelNames: ['hops', 'location'] as const,
-            percentiles: [0.5, 0.7, 0.9, 0.99],
-        });
-        fetchSum.observe({ hops }, metrics.fetchDur);
-        rpcSum.observe({ hops }, metrics.rpcDur);
-        exitAppSum.observe({ hops }, metrics.exitAppDur);
-        segSum.observe({ hops }, metrics.segDur);
-        hoprSum.observe({ hops }, metrics.hoprDur);
+function collectMetrics(metrics: Record<string, prom.Summary>) {
+    return function (metricsDurations: runner.Durations) {
+        metrics['fetchSum'].observe(metricsDurations.fetchDur);
+        metrics['rpcSum'].observe(metricsDurations.rpcDur);
+        metrics['exitAppSum'].observe(metricsDurations.exitAppDur);
+        metrics['segSum'].observe(metricsDurations.segDur);
+        metrics['hoprSum'].observe(metricsDurations.hoprDur);
     };
 }
 
-function reportError(hops: number) {
+function reportError(errorCounter: prom.Counter) {
     return function (err: Error) {
         log.error('Error trying to check latency: %s', err);
-        const errorSum = new prom.Summary({
-            name: `uhttp_error`,
-            help: 'Latency measure not possible due to error',
-            labelNames: ['hops', 'location'] as const,
-        });
-        errorSum.observe({ hops }, 0);
+        errorCounter.inc();
     };
 }
 
-function pushMetrics(pushGateway?: string) {
+function pushMetrics(settings: Settings) {
     return function () {
-        if (!pushGateway) {
-            log.info('Latency Monitor[%s] finished without pushing metrics', Version);
-            return;
-        }
-        const gateway = new prom.Pushgateway(pushGateway);
+        const gateway = new prom.Pushgateway(settings.pushGateway);
         gateway
-            .pushAdd({ jobName: 'uhttp-latency-monitor' })
+            .push({ jobName: settings.metricLabels.instance, groupings: settings.metricLabels })
             .then(() => {
-                log.info('Latency Monitor[%s] finished run successfully', Version);
+                log.info('Latency Monitor[%s] Metrics pushed correctly', Version);
             })
             .catch((err) => {
-                log.error('Error pushing metrics to %s: %s', pushGateway, err);
+                log.error('Error pushing metrics to %s: %s', settings.pushGateway, err);
             });
     };
 }
