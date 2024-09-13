@@ -63,6 +63,7 @@ if (require.main === module) {
         throw new Error("Missing 'UHTTP_LM_METRIC_LONGITUDE' env var");
     }
 
+    const metricInstance = process.env.UHTTP_LM_METRIC_INSTANCE;
     const uClientId = process.env.UHTTP_LM_CLIENT_ID;
     const rpcProvider = process.env.UHTTP_LM_RPC_PROVIDER;
     const forceZeroHop = parseBooleanEnv(process.env.UHTTP_LM_ZERO_HOP);
@@ -90,12 +91,12 @@ if (require.main === module) {
         metrics: {},
         metricLabels: {
             hops: forceZeroHop ? '0' : '1',
-            instance: process.env.UHTTP_LM_METRIC_INSTANCE || 'unknown',
-            region: process.env.UHTTP_LM_METRIC_REGION || 'unknown',
-            zone: process.env.UHTTP_LM_METRIC_ZONE || 'unknown',
-            location: process.env.UHTTP_LM_METRIC_LOCATION || 'unknown',
-            latitude: process.env.UHTTP_LM_METRIC_LATITUDE || 'unknown',
-            longitude: process.env.UHTTP_LM_METRIC_LONGITUDE || 'unknown',
+            instance: metricInstance,
+            region: process.env.UHTTP_LM_METRIC_REGION,
+            zone: process.env.UHTTP_LM_METRIC_ZONE,
+            location: process.env.UHTTP_LM_METRIC_LOCATION,
+            latitude: process.env.UHTTP_LM_METRIC_LATITUDE,
+            longitude: process.env.UHTTP_LM_METRIC_LONGITUDE,
         },
     };
     const logOpts = {
@@ -170,7 +171,7 @@ function tick(uClient: Routing.Client, uHTTPsettings: UHTTPsettings, settings: S
             collectMetrics(settings.metrics as Record<string, prom.Summary>, settings.metricLabels),
         )
         .catch(reportError(settings.metrics['errorSum'] as prom.Counter, settings.metricLabels))
-        .finally(pushMetrics(settings.pushGateway));
+        .finally(pushMetrics(settings));
 }
 
 function collectMetrics(
@@ -193,20 +194,20 @@ function reportError(errorCounter: prom.Counter, metricLabels: Record<string, st
     };
 }
 
-function pushMetrics(pushGateway?: string) {
+function pushMetrics(settings: Settings) {
     return function () {
-        if (!pushGateway) {
+        if (!settings.pushGateway) {
             log.info('Latency Monitor[%s] finished without pushing metrics', Version);
             return;
         }
-        const gateway = new prom.Pushgateway(pushGateway);
+        const gateway = new prom.Pushgateway(settings.pushGateway);
         gateway
-            .push({ jobName: process.env.UHTTP_LM_METRIC_INSTANCE || 'unknown' })
+            .push({ jobName: settings.metricLabels.instance })
             .then(() => {
                 log.info('Latency Monitor[%s] finished run successfully', Version);
             })
             .catch((err) => {
-                log.error('Error pushing metrics to %s: %s', pushGateway, err);
+                log.error('Error pushing metrics to %s: %s', settings.pushGateway, err);
             });
     };
 }
