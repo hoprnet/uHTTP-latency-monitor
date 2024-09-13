@@ -92,7 +92,8 @@ jobs:
                   branch: bot/open-${{ inputs.release_type }}-${{ steps.bump.outputs.bump_version }}
                   delete-branch: true
                   assignees: ${{ github.actor }}
-                  team-reviewers: '@hoprnet/hopr-products-team'
+                  reviewers: 'esterlus'
+                  team-reviewers: '@hoprnet/hopr-devops'
 
             - name: Notify new release
               uses: zulip/github-actions-zulip/send-message@v1
