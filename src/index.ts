@@ -8,7 +8,7 @@ import * as runner from './runner';
 type UHTTPsettings = Routing.Settings & { uClientId: string; rpcProvider: string };
 
 type Settings = {
-    pushGateway?: string;
+    pushGateway: string;
     intervalMs: number;
     offsetMs: number;
     metricLabels: Record<string, string>;
@@ -166,44 +166,38 @@ function tick(uClient: Routing.Client, uHTTPsettings: UHTTPsettings, settings: S
     log.info('Executing latency tick - scheduled to execute every %dms', settings.intervalMs);
     runner
         .once(uClient, uHTTPsettings.rpcProvider)
-        .then(
-            collectMetrics(settings.metrics as Record<string, prom.Summary>, settings.metricLabels),
-        )
-        .catch(reportError(settings.metrics['errorSum'] as prom.Counter, settings.metricLabels))
-        .finally(pushMetrics(settings.pushGateway));
+        .then(collectMetrics(settings.metrics as Record<string, prom.Summary>))
+        .catch(reportError(settings.metrics['errorSum'] as prom.Counter))
+        .finally(pushMetrics(settings.pushGateway, settings.metricLabels));
 }
 
-function collectMetrics(
-    metrics: Record<string, prom.Summary>,
-    metricLabels: Record<string, string>,
-) {
+function collectMetrics(metrics: Record<string, prom.Summary>) {
     return function (metricsDurations: runner.Durations) {
-        metrics['fetchSum'].observe(metricLabels, metricsDurations.fetchDur);
-        metrics['rpcSum'].observe(metricLabels, metricsDurations.rpcDur);
-        metrics['exitAppSum'].observe(metricLabels, metricsDurations.exitAppDur);
-        metrics['segSum'].observe(metricLabels, metricsDurations.segDur);
-        metrics['hoprSum'].observe(metricLabels, metricsDurations.hoprDur);
+        metrics['fetchSum'].observe(metricsDurations.fetchDur);
+        metrics['rpcSum'].observe(metricsDurations.rpcDur);
+        metrics['exitAppSum'].observe(metricsDurations.exitAppDur);
+        metrics['segSum'].observe(metricsDurations.segDur);
+        metrics['hoprSum'].observe(metricsDurations.hoprDur);
     };
 }
 
-function reportError(errorCounter: prom.Counter, metricLabels: Record<string, string>) {
+function reportError(errorCounter: prom.Counter) {
     return function (err: Error) {
         log.error('Error trying to check latency: %s', err);
-        errorCounter.inc(metricLabels);
+        errorCounter.inc();
     };
 }
 
-function pushMetrics(pushGateway?: string) {
+function pushMetrics(pushGateway: string, metricLabels: Record<string, string>) {
     return function () {
-        if (!pushGateway) {
-            log.info('Latency Monitor[%s] finished without pushing metrics', Version);
-            return;
-        }
         const gateway = new prom.Pushgateway(pushGateway);
         gateway
-            .push({ jobName: process.env.UHTTP_LM_METRIC_INSTANCE || 'unknown' })
+            .push({
+                jobName: process.env.UHTTP_LM_METRIC_INSTANCE || 'unknown',
+                groupings: metricLabels,
+            })
             .then(() => {
-                log.info('Latency Monitor[%s] finished run successfully', Version);
+                log.info('Latency Monitor[%s] Metrics pushed correctly', Version);
             })
             .catch((err) => {
                 log.error('Error pushing metrics to %s: %s', pushGateway, err);
