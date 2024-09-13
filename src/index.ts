@@ -192,7 +192,7 @@ function pushMetrics(settings: Settings) {
     return function () {
         const gateway = new prom.Pushgateway(settings.pushGateway);
         gateway
-            .push({ jobName: settings.metricLabels.instance })
+            .push({ jobName: settings.metricLabels.instance, groupings: settings.metricLabels })
             .then(() => {
                 log.info('Latency Monitor[%s] Metrics pushed correctly', Version);
             })
