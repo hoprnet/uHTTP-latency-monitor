@@ -63,7 +63,6 @@ if (require.main === module) {
         throw new Error("Missing 'UHTTP_LM_METRIC_LONGITUDE' env var");
     }
 
-    const metricInstance = process.env.UHTTP_LM_METRIC_INSTANCE;
     const uClientId = process.env.UHTTP_LM_CLIENT_ID;
     const rpcProvider = process.env.UHTTP_LM_RPC_PROVIDER;
     const forceZeroHop = parseBooleanEnv(process.env.UHTTP_LM_ZERO_HOP);
@@ -91,7 +90,7 @@ if (require.main === module) {
         metrics: {},
         metricLabels: {
             hops: forceZeroHop ? '0' : '1',
-            instance: metricInstance,
+            instance: process.env.UHTTP_LM_METRIC_INSTANCE,
             region: process.env.UHTTP_LM_METRIC_REGION,
             zone: process.env.UHTTP_LM_METRIC_ZONE,
             location: process.env.UHTTP_LM_METRIC_LOCATION,
