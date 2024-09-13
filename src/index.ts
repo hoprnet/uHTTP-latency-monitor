@@ -90,12 +90,12 @@ if (require.main === module) {
         metrics: {},
         metricLabels: {
             hops: forceZeroHop ? '0' : '1',
-            instance: process.env.UHTTP_LM_METRIC_INSTANCE || 'unknown',
-            region: process.env.UHTTP_LM_METRIC_REGION || 'unknown',
-            zone: process.env.UHTTP_LM_METRIC_ZONE || 'unknown',
-            location: process.env.UHTTP_LM_METRIC_LOCATION || 'unknown',
-            latitude: process.env.UHTTP_LM_METRIC_LATITUDE || 'unknown',
-            longitude: process.env.UHTTP_LM_METRIC_LONGITUDE || 'unknown',
+            instance: process.env.UHTTP_LM_METRIC_INSTANCE,
+            region: process.env.UHTTP_LM_METRIC_REGION,
+            zone: process.env.UHTTP_LM_METRIC_ZONE,
+            location: process.env.UHTTP_LM_METRIC_LOCATION,
+            latitude: process.env.UHTTP_LM_METRIC_LATITUDE,
+            longitude: process.env.UHTTP_LM_METRIC_LONGITUDE,
         },
     };
     const logOpts = {
@@ -168,7 +168,7 @@ function tick(uClient: Routing.Client, uHTTPsettings: UHTTPsettings, settings: S
         .once(uClient, uHTTPsettings.rpcProvider)
         .then(collectMetrics(settings.metrics as Record<string, prom.Summary>))
         .catch(reportError(settings.metrics['errorSum'] as prom.Counter))
-        .finally(pushMetrics(settings.pushGateway, settings.metricLabels));
+        .finally(pushMetrics(settings));
 }
 
 function collectMetrics(metrics: Record<string, prom.Summary>) {
@@ -188,19 +188,16 @@ function reportError(errorCounter: prom.Counter) {
     };
 }
 
-function pushMetrics(pushGateway: string, metricLabels: Record<string, string>) {
+function pushMetrics(settings: Settings) {
     return function () {
-        const gateway = new prom.Pushgateway(pushGateway);
+        const gateway = new prom.Pushgateway(settings.pushGateway);
         gateway
-            .push({
-                jobName: process.env.UHTTP_LM_METRIC_INSTANCE || 'unknown',
-                groupings: metricLabels,
-            })
+            .push({ jobName: settings.metricLabels.instance })
             .then(() => {
                 log.info('Latency Monitor[%s] Metrics pushed correctly', Version);
             })
             .catch((err) => {
-                log.error('Error pushing metrics to %s: %s', pushGateway, err);
+                log.error('Error pushing metrics to %s: %s', settings.pushGateway, err);
             });
     };
 }
