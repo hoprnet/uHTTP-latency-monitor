@@ -12,3 +12,7 @@ Measure roundtrip latency through uHTTP network.
 
 -   Build container with `docker build -t uhttp-latency-monitor .`
 -   Run container with `docker run --env-file .env --platform linux/amd64 uhttp-latency-monitor`
+
+## Deployment process
+
+To contribute to this repository you will need to create a pull request. More information about the existing automated workflows can be found in [GitHub Actions](./.github/workflows/README.md)
