@@ -29,7 +29,7 @@ jobs:
             - name: Setup Node.js
               uses: hoprnet/hopr-workflows/actions/setup-node-js@master
               with:
-                  node-version: 20
+                  node-version: ${{ vars.NODE_VERSION }}
 
             - name: Setup GCP
               id: gcp
@@ -41,7 +41,7 @@ jobs:
             - name: Set up Docker Buildx
               uses: docker/setup-buildx-action@v3
               with:
-                driver: kubernetes
+                  driver: kubernetes
 
             - name: Building
               run: yarn build
@@ -64,15 +64,14 @@ jobs:
             - name: Create Release
               uses: softprops/action-gh-release@v2
               with:
-                  name: 'uhttp-latency-monitor - v${{ steps.environment.outputs.release_version }}'
+                  name: '${{ vars.DOCKER_IMAGE_NAME }} - v${{ steps.environment.outputs.release_version }}'
                   tag_name: v${{ steps.environment.outputs.release_version }}
-
 
             - name: Build and push docker image
               uses: docker/build-push-action@v4
               with:
-                push: true
-                tags: europe-west3-docker.pkg.dev/hoprassociation/docker-images/uhttp-latency-monitor:${{ steps.environment.outputs.release_version }}
+                  push: true
+                  tags: ${{ vars.DOCKER_IMAGE_REGISTRY }}/${{ vars.DOCKER_IMAGE_NAME }}:${{ steps.environment.outputs.release_version }}
 
             - name: Bump Version
               id: bump
@@ -93,7 +92,7 @@ jobs:
                   delete-branch: true
                   assignees: ${{ github.actor }}
                   reviewers: 'esterlus'
-                  team-reviewers: '@hoprnet/hopr-devops'
+                  team-reviewers: '@hoprnet/hopr-products-team'
 
             - name: Notify new release
               uses: zulip/github-actions-zulip/send-message@v1
@@ -105,4 +104,4 @@ jobs:
                   to: 'Releases'
                   topic: 'main'
                   content: |
-                      I'm thrilled to inform the new **uhttp-latency-monitor** version **${{ steps.environment.outputs.release_version }}** has been released.
+                      I'm thrilled to inform the new **${{ vars.DOCKER_IMAGE_NAME }}** version **${{ steps.environment.outputs.release_version }}** has been released.
