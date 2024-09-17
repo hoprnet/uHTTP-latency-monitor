@@ -9,10 +9,12 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
-    build-and-publish:
-        name: Build and Push
+    build:
+        name: Build
         runs-on: self-hosted-hoprnet-small
-
+        strategy:
+            matrix:
+                node-version: [20.x, 21.x, 22.x]
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
@@ -20,18 +22,7 @@ jobs:
             - name: Setup Node.js
               uses: hoprnet/hopr-workflows/actions/setup-node-js@master
               with:
-                  node-version: 20
-
-            - name: Setup GCP
-              uses: hoprnet/hopr-workflows/actions/setup-gcp@master
-              with:
-                  google-credentials: ${{ secrets.GOOGLE_HOPRASSOCIATION_CREDENTIALS_REGISTRY }}
-                  login-artifact-registry: 'true'
-
-            - name: Set up Docker Buildx
-              uses: docker/setup-buildx-action@v3
-              with:
-                driver: kubernetes
+                  node-version: ${{ matrix.node-version }}
 
             - name: Building
               run: yarn build
@@ -45,14 +36,34 @@ jobs:
             - name: Testing
               run: yarn test
 
+    publish:
+        name: Publish
+        runs-on: self-hosted-hoprnet-small
+        needs: build
+        steps:
+            - name: Checkout repository
+              uses: actions/checkout@v4
+
+            - name: Setup GCP
+              id: gcp
+              uses: hoprnet/hopr-workflows/actions/setup-gcp@master
+              with:
+                  google-credentials: ${{ secrets.GOOGLE_HOPRASSOCIATION_CREDENTIALS_REGISTRY }}
+                  login-artifact-registry: 'true'
+
+            - name: Set up Docker Buildx
+              uses: docker/setup-buildx-action@v3
+              with:
+                  driver: kubernetes
+
             - name: Get PR version
               id: variables
               run: |
-                  PR_VERSION=$(node -p "require('./package.json').version")-pr.${{ github.event.pull_request.number }}
+                  PR_VERSION=$(jq -r '.version' ./package.json)-pr.${{ github.event.pull_request.number }}
                   echo "PR_VERSION=${PR_VERSION}" >> $GITHUB_OUTPUT
 
             - name: Build and push docker image
               uses: docker/build-push-action@v4
               with:
-                push: true
-                tags: europe-west3-docker.pkg.dev/hoprassociation/docker-images/uhttp-latency-monitor:${{ steps.variables.outputs.PR_VERSION }}
+                  push: true
+                  tags: ${{ vars.DOCKER_IMAGE_REGISTRY }}/${{ vars.DOCKER_IMAGE_NAME }}:${{ steps.variables.outputs.PR_VERSION }}
